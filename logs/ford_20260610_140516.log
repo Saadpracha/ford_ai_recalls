@@ -1,5 +1,0 @@
-2026-06-10 14:05:16,577 [INFO] __main__: Log file: E:\work\leadgeneration\mywork\ford_ai_recalls\ford_ai_recalls\logs\ford_20260610_140516.log
-2026-06-10 14:05:16,578 [INFO] __main__: Input: E:\work\leadgeneration\mywork\ford_ai_recalls\ford_ai_recalls\Input_recalls_number.xlsx | Output: E:\work\leadgeneration\mywork\ford_ai_recalls\ford_ai_recalls\en_ford_recalls_output.csv | Proxy: True | Languages: EN-US,FR-CA | Mode: export-session | Virtual display: False
-2026-06-10 14:05:16,591 [INFO] __main__: Reusing saved session proxy: 178.209.76.123:12323
-2026-06-10 14:05:56,909 [INFO] ford_scraper: Existing session reused. URL: https://www.fordtechservice.dealerconnection.com/
-2026-06-10 14:05:57,189 [INFO] session_state: Exported session to E:\work\leadgeneration\mywork\ford_ai_recalls\ford_ai_recalls\ford_session.json (39 cookies, 1 origins)
