@@ -71,6 +71,14 @@ RECALL_DELAY = float(os.getenv("RECALL_DELAY", "1.5"))
 PROXY_CSV_PATH = os.getenv("PROXY_CSV_PATH", str(BASE_DIR / "iproyal-proxies-10.csv"))
 USE_PROXY = os.getenv("USE_PROXY", "true").lower() in ("1", "true", "yes")
 
+# Linux server: run Chrome in a virtual X display (headless=False) instead of Playwright headless.
+# Auto-enabled on Linux when DISPLAY is unset. Requires: apt install xvfb
+USE_VIRTUAL_DISPLAY = os.getenv("USE_VIRTUAL_DISPLAY", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 # OpenAI — PDF text sent for labour codes and owner letter parts availability
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")

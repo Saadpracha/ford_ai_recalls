@@ -8,7 +8,9 @@ Results saved incrementally to CSV (utf-8-sig) after each language is processed.
 import argparse
 import asyncio
 import logging
+import os
 import sys
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -25,6 +27,7 @@ from config import (
     RECALL_DELAY,
     resolve_recall_languages,
     USE_PROXY,
+    USE_VIRTUAL_DISPLAY,
 )
 from csv_output import CsvWriter
 from ford_scraper import ensure_logged_in, process_recall
@@ -40,6 +43,55 @@ from proxies import (
 from recall_input import load_recall_numbers
 
 logger = logging.getLogger(__name__)
+
+VIRTUAL_DISPLAY_SIZE = (1400, 900)
+
+
+def resolve_virtual_display(
+    *,
+    cli_flag: bool = False,
+    env_flag: bool = USE_VIRTUAL_DISPLAY,
+) -> bool:
+    """Use pyvirtualdisplay on Linux servers (headless=False in a virtual X session)."""
+    if cli_flag or env_flag:
+        return True
+    return sys.platform.startswith("linux") and not os.environ.get("DISPLAY")
+
+
+@contextmanager
+def virtual_display_context(enabled: bool):
+    display = None
+    if enabled:
+        try:
+            from pyvirtualdisplay import Display
+        except ImportError as exc:
+            raise SystemExit(
+                "pyvirtualdisplay is required for virtual display mode.\n"
+                "Install: pip install pyvirtualdisplay\n"
+                "On Linux also install Xvfb: sudo apt install xvfb"
+            ) from exc
+
+        display = Display(visible=0, size=VIRTUAL_DISPLAY_SIZE)
+        display.start()
+        logger.info(
+            "Virtual display started (DISPLAY=%s, size=%sx%s)",
+            os.environ.get("DISPLAY"),
+            VIRTUAL_DISPLAY_SIZE[0],
+            VIRTUAL_DISPLAY_SIZE[1],
+        )
+
+    try:
+        yield
+    finally:
+        if display is not None:
+            display.stop()
+            logger.info("Virtual display stopped")
+
+
+def wait_to_close_browser(*, interactive: bool) -> None:
+    if not interactive:
+        return
+    input("Press ENTER to close the browser... ")
 
 
 def setup_logging() -> Path:
@@ -178,6 +230,7 @@ async def run(
     proxy_index: int | None = None,
     new_proxy: bool = False,
     lang: str | None = None,
+    virtual_display: bool = False,
 ) -> None:
     languages = resolve_recall_languages(lang)
     Path(FORD_PROFILE_DIR).mkdir(parents=True, exist_ok=True)
@@ -188,9 +241,19 @@ async def run(
         new_proxy=new_proxy,
     )
 
+    use_vdisplay = resolve_virtual_display(cli_flag=virtual_display)
+    browser_headless = False if use_vdisplay else headless
+    interactive_close = not use_vdisplay and sys.stdin.isatty()
+
+    if use_vdisplay and headless:
+        logger.info(
+            "Virtual display enabled — running browser with headless=False "
+            "(ignoring --headless)"
+        )
+
     launch_kwargs: dict = {
         "user_data_dir": FORD_PROFILE_DIR,
-        "headless": headless,
+        "headless": browser_headless,
         "accept_downloads": True,
         "viewport": {"width": 1400, "height": 900},
         "channel": BROWSER_CHANNEL,
@@ -200,44 +263,47 @@ async def run(
     if proxy_dict:
         launch_kwargs["proxy"] = proxy_dict
 
-    async with async_playwright() as p:
-        context = None
-        try:
+    with virtual_display_context(use_vdisplay):
+        async with async_playwright() as p:
+            context = None
             try:
-                context = await p.chromium.launch_persistent_context(**launch_kwargs)
-            except Exception:
-                logger.warning("Google Chrome not found — falling back to bundled Chromium")
-                launch_kwargs.pop("channel", None)
-                context = await p.chromium.launch_persistent_context(**launch_kwargs)
-
-            await context.add_init_script(STEALTH_INIT_SCRIPT)
-            await ensure_logged_in(context, reuse_session=not login_only)
-
-            if login_only:
-                print("Done. Session saved in:", FORD_PROFILE_DIR)
-                print("Proxy saved in:", PROXY_SESSION_FILE)
-                print("Browser tabs left open until you close the window.")
-                input("Press ENTER to close the browser... ")
-                return
-
-            recalls = load_recall_numbers(Path(INPUT_RECALLS_FILE))
-            csv_writer = CsvWriter(Path(OUTPUT_CSV_FILE))
-
-            print(f"\nInput file:  {INPUT_RECALLS_FILE}")
-            print(f"Output CSV:  {OUTPUT_CSV_FILE}")
-            print(f"Recalls:     {len(recalls)}")
-            print(f"Languages:   {', '.join(languages)}")
-            print(f"Already done: {csv_writer.done_count} row(s)\n")
-
-            await process_all_recalls(context, recalls, csv_writer, languages)
-
-            input("Press ENTER to close the browser... ")
-        finally:
-            if context is not None:
                 try:
-                    await context.close()
+                    context = await p.chromium.launch_persistent_context(**launch_kwargs)
                 except Exception:
-                    pass
+                    logger.warning(
+                        "Google Chrome not found — falling back to bundled Chromium"
+                    )
+                    launch_kwargs.pop("channel", None)
+                    context = await p.chromium.launch_persistent_context(**launch_kwargs)
+
+                await context.add_init_script(STEALTH_INIT_SCRIPT)
+                await ensure_logged_in(context, reuse_session=not login_only)
+
+                if login_only:
+                    print("Done. Session saved in:", FORD_PROFILE_DIR)
+                    print("Proxy saved in:", PROXY_SESSION_FILE)
+                    print("Browser tabs left open until you close the window.")
+                    wait_to_close_browser(interactive=interactive_close)
+                    return
+
+                recalls = load_recall_numbers(Path(INPUT_RECALLS_FILE))
+                csv_writer = CsvWriter(Path(OUTPUT_CSV_FILE))
+
+                print(f"\nInput file:  {INPUT_RECALLS_FILE}")
+                print(f"Output CSV:  {OUTPUT_CSV_FILE}")
+                print(f"Recalls:     {len(recalls)}")
+                print(f"Languages:   {', '.join(languages)}")
+                print(f"Already done: {csv_writer.done_count} row(s)\n")
+
+                await process_all_recalls(context, recalls, csv_writer, languages)
+
+                wait_to_close_browser(interactive=interactive_close)
+            finally:
+                if context is not None:
+                    try:
+                        await context.close()
+                    except Exception:
+                        pass
 
 
 def main() -> None:
@@ -250,7 +316,12 @@ def main() -> None:
     parser.add_argument(
         "--headless",
         action="store_true",
-        help="Run without browser window (only after session is saved)",
+        help="Run Playwright headless mode (only after session is saved)",
+    )
+    parser.add_argument(
+        "--virtual-display",
+        action="store_true",
+        help="Linux server: use pyvirtualdisplay + headless=False (needs xvfb)",
     )
     parser.add_argument(
         "--no-proxy",
@@ -283,13 +354,15 @@ def main() -> None:
     log_file = setup_logging()
     logger.info("Log file: %s", log_file)
     languages = resolve_recall_languages(args.lang)
+    use_vdisplay = resolve_virtual_display(cli_flag=args.virtual_display)
     logger.info(
-        "Input: %s | Output: %s | Proxy: %s | Languages: %s | Mode: %s",
+        "Input: %s | Output: %s | Proxy: %s | Languages: %s | Mode: %s | Virtual display: %s",
         INPUT_RECALLS_FILE,
         OUTPUT_CSV_FILE,
         use_proxy,
         ",".join(languages),
         "login-only" if args.login_only else "batch",
+        use_vdisplay,
     )
 
     try:
@@ -301,6 +374,7 @@ def main() -> None:
                 proxy_index=args.proxy_index,
                 new_proxy=args.new_proxy,
                 lang=args.lang,
+                virtual_display=args.virtual_display,
             )
         )
     except KeyboardInterrupt:
