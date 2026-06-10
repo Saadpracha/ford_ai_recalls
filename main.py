@@ -16,7 +16,12 @@ from pathlib import Path
 
 from playwright.async_api import async_playwright
 
-from browser import BROWSER_ARGS, BROWSER_CHANNEL, STEALTH_INIT_SCRIPT
+from browser import (
+    BROWSER_ARGS,
+    BROWSER_CHANNEL,
+    CHROME_LINUX_INSTALL_HINT,
+    STEALTH_INIT_SCRIPT,
+)
 from config import (
     FORD_PROFILE_DIR,
     INPUT_RECALLS_FILE,
@@ -25,6 +30,7 @@ from config import (
     PROXY_CSV_PATH,
     PROXY_SESSION_FILE,
     RECALL_DELAY,
+    SESSION_STATE_FILE,
     resolve_recall_languages,
     USE_PROXY,
     USE_VIRTUAL_DISPLAY,
@@ -41,6 +47,7 @@ from proxies import (
     save_proxy_session,
 )
 from recall_input import load_recall_numbers
+from session_state import export_storage_state
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +232,7 @@ async def process_all_recalls(
 
 async def run(
     login_only: bool = False,
+    export_session: bool = False,
     headless: bool = False,
     use_proxy: bool = True,
     proxy_index: int | None = None,
@@ -256,10 +264,11 @@ async def run(
         "headless": browser_headless,
         "accept_downloads": True,
         "viewport": {"width": 1400, "height": 900},
-        "channel": BROWSER_CHANNEL,
         "ignore_default_args": ["--enable-automation"],
         "args": BROWSER_ARGS,
     }
+    if BROWSER_CHANNEL:
+        launch_kwargs["channel"] = BROWSER_CHANNEL
     if proxy_dict:
         launch_kwargs["proxy"] = proxy_dict
 
@@ -270,14 +279,24 @@ async def run(
                 try:
                     context = await p.chromium.launch_persistent_context(**launch_kwargs)
                 except Exception:
-                    logger.warning(
-                        "Google Chrome not found — falling back to bundled Chromium"
-                    )
-                    launch_kwargs.pop("channel", None)
+                    if BROWSER_CHANNEL:
+                        logger.warning(
+                            "Google Chrome not found — falling back to bundled Chromium"
+                        )
+                        if sys.platform.startswith("linux"):
+                            logger.warning(CHROME_LINUX_INSTALL_HINT)
+                        launch_kwargs.pop("channel", None)
                     context = await p.chromium.launch_persistent_context(**launch_kwargs)
 
                 await context.add_init_script(STEALTH_INIT_SCRIPT)
                 await ensure_logged_in(context, reuse_session=not login_only)
+
+                if export_session:
+                    await export_storage_state(context, SESSION_STATE_FILE)
+                    print(f"\nSession exported to: {SESSION_STATE_FILE}")
+                    print("Copy this file to the server (with ford_profile/proxy_session.json).")
+                    print("On server:  python main.py\n")
+                    return
 
                 if login_only:
                     print("Done. Session saved in:", FORD_PROFILE_DIR)
@@ -312,6 +331,11 @@ def main() -> None:
         "--login-only",
         action="store_true",
         help="Open browser, login via DSPS, save session + proxy, then exit",
+    )
+    parser.add_argument(
+        "--export-session",
+        action="store_true",
+        help="Export portable ford_session.json for Linux server (run on PC after login)",
     )
     parser.add_argument(
         "--headless",
@@ -361,14 +385,19 @@ def main() -> None:
         OUTPUT_CSV_FILE,
         use_proxy,
         ",".join(languages),
-        "login-only" if args.login_only else "batch",
+        "export-session"
+        if args.export_session
+        else ("login-only" if args.login_only else "batch"),
         use_vdisplay,
     )
+    if SESSION_STATE_FILE.is_file():
+        logger.info("Portable session file present: %s", SESSION_STATE_FILE)
 
     try:
         asyncio.run(
             run(
                 login_only=args.login_only,
+                export_session=args.export_session,
                 headless=args.headless,
                 use_proxy=use_proxy,
                 proxy_index=args.proxy_index,

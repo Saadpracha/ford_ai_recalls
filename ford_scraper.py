@@ -1,10 +1,21 @@
 import logging
 import re
+import sys
+from pathlib import Path
 from urllib.parse import urljoin
 
 from playwright.async_api import BrowserContext, Frame, Page, Error as PlaywrightError
 
-from config import DOWNLOADS_DIR, FORD_BASE_URL, FORD_COUNTRY, FORD_DSPS_URL, FORD_RECALL_URL
+from config import (
+    DOWNLOADS_DIR,
+    FORD_BASE_URL,
+    FORD_COUNTRY,
+    FORD_DSPS_URL,
+    FORD_PROFILE_DIR,
+    FORD_RECALL_URL,
+    SESSION_STATE_FILE,
+)
+from session_state import apply_storage_state, cross_platform_profile_hint
 from models import RecallResult
 from pdf_parser import (
     download_and_save_pdf,
@@ -111,7 +122,34 @@ async def is_ford_ready(page: Page) -> bool:
     return is_logged_in(page.url)
 
 
+SERVER_LOGIN_HELP = """
+Server login requires a visible browser (SSO + 2FA cannot run blindly).
+
+Option A — portable session from your PC (recommended):
+  1. On PC (already logged in):  python main.py --export-session
+  2. Copy ford_session.json and ford_profile/proxy_session.json to the server
+  3. On server:  python main.py
+
+Option B — login directly on the server:
+  1. Install Chrome:  sudo apt install ./google-chrome-stable_current_amd64.deb
+  2. Use SSH with X11 (ssh -X) or VNC/noVNC to see the browser
+  3. Run:  python main.py --login-only
+  4. Complete SSO + 2FA in the browser, press ENTER when done
+  5. Then run:  python main.py
+"""
+
+
+def interactive_login_allowed() -> bool:
+    return sys.stdin.isatty()
+
+
 async def _wait_for_manual_login(page: Page, portal_name: str) -> None:
+    if not interactive_login_allowed():
+        raise RuntimeError(
+            f"Interactive login required for {portal_name}, but this terminal "
+            f"cannot complete SSO/2FA.{SERVER_LOGIN_HELP}"
+        )
+
     print("\n" + "=" * 60)
     print(f"  LOGIN REQUIRED — {portal_name}")
     print("  Complete SSO and 2FA in the browser window.")
@@ -121,21 +159,46 @@ async def _wait_for_manual_login(page: Page, portal_name: str) -> None:
     input("Press ENTER after login is complete... ")
 
 
+async def _try_restore_session(context: BrowserContext, page: Page) -> bool:
+    await page.goto(FORD_BASE_URL, wait_until="domcontentloaded", timeout=60_000)
+    await _wait_for_page_settle(page)
+    if await is_ford_ready(page):
+        return True
+
+    if not SESSION_STATE_FILE.is_file():
+        return False
+
+    logger.info("Trying portable session file: %s", SESSION_STATE_FILE)
+    print(f"\nLoading portable session: {SESSION_STATE_FILE}\n")
+    await apply_storage_state(context, SESSION_STATE_FILE)
+    await page.goto(FORD_BASE_URL, wait_until="domcontentloaded", timeout=60_000)
+    await _wait_for_page_settle(page)
+    return await is_ford_ready(page)
+
+
 async def ensure_logged_in(context: BrowserContext, reuse_session: bool = True) -> Page:
     """
     If reuse_session and cookies are valid, go straight to Ford TechService.
     Otherwise: DSPS login (tab 1) then verify Ford TechService (tab 2).
     """
     page = context.pages[0] if context.pages else await context.new_page()
+    profile_hint = cross_platform_profile_hint(Path(FORD_PROFILE_DIR))
 
     if reuse_session:
-        await page.goto(FORD_BASE_URL, wait_until="domcontentloaded", timeout=60_000)
-        await _wait_for_page_settle(page)
-        if await is_ford_ready(page):
+        if await _try_restore_session(context, page):
             logger.info("Existing session reused. URL: %s", page.url)
             print(f"\nSession reused (no re-login): {page.url}\n")
             return page
+
         logger.info("Saved session expired or missing — starting login flow")
+        if profile_hint:
+            logger.warning("Profile cookies present but session invalid%s", profile_hint)
+            print(profile_hint)
+            if not interactive_login_allowed():
+                raise RuntimeError(
+                    "Session is not valid on this machine."
+                    f"{profile_hint}{SERVER_LOGIN_HELP}"
+                )
 
     login_page = page
     await login_page.goto(FORD_DSPS_URL, wait_until="domcontentloaded", timeout=60_000)

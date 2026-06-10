@@ -60,6 +60,10 @@ FORD_RECALL_URL = (
 
 FORD_PROFILE_DIR = os.getenv("FORD_PROFILE_DIR", str(BASE_DIR / "ford_profile"))
 PROXY_SESSION_FILE = Path(FORD_PROFILE_DIR) / "proxy_session.json"
+# Portable session (export on PC, copy to server). Not tied to OS encryption.
+SESSION_STATE_FILE = Path(
+    os.getenv("SESSION_STATE_FILE", str(BASE_DIR / "ford_session.json"))
+)
 LOGS_DIR = BASE_DIR / "logs"
 CHECKPOINT_FILE = BASE_DIR / "processed.json"
 DOWNLOADS_DIR = BASE_DIR / "downloads"
