@@ -1,0 +1,14 @@
+2026/06/09-12:22:58.810 45cc Reusing MANIFEST E:\work\leadgeneration\Ford_ai_recalls\ford_profile\Default\Session Storage/MANIFEST-000001
+2026/06/09-12:22:58.811 45cc Recovering log #8
+2026/06/09-12:22:58.821 45cc Reusing old log E:\work\leadgeneration\Ford_ai_recalls\ford_profile\Default\Session Storage/000008.log 
+2026/06/09-12:33:15.109 1948 Level-0 table #12: started
+2026/06/09-12:33:15.139 1948 Level-0 table #12: 16547 bytes OK
+2026/06/09-12:33:15.205 1948 Delete type=0 #8
+2026/06/09-12:33:15.206 1948 Compacting 4@0 + 0@1 files
+2026/06/09-12:33:15.340 1948 Generated table #13@0: 179 keys, 5984 bytes
+2026/06/09-12:33:15.340 1948 Compacted 4@0 + 0@1 files => 5984 bytes
+2026/06/09-12:33:15.372 1948 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/06/09-12:33:15.374 1948 Delete type=2 #3
+2026/06/09-12:33:15.374 1948 Delete type=2 #7
+2026/06/09-12:33:15.374 1948 Delete type=2 #9
+2026/06/09-12:33:15.374 1948 Delete type=2 #12

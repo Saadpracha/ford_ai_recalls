@@ -1,0 +1,14 @@
+[0607/114250.489:ERROR:cache_util_win.cc(20)] Unable to move the cache: Access is denied. (0x5)
+[0607/114250.490:ERROR:cache_util_win.cc(20)] Unable to move the cache: Access is denied. (0x5)
+[0607/114250.492:ERROR:disk_cache.cc(208)] Unable to create cache
+[0607/114250.492:ERROR:gpu_disk_cache.cc(713)] Gpu Cache Creation failed: -2
+[0607/114250.493:ERROR:disk_cache.cc(208)] Unable to create cache
+[0607/114250.493:ERROR:gpu_disk_cache.cc(713)] Gpu Cache Creation failed: -2
+[0607/114250.495:ERROR:cache_util_win.cc(20)] Unable to move the cache: Access is denied. (0x5)
+[0607/114250.495:ERROR:disk_cache.cc(208)] Unable to create cache
+[0607/114250.496:ERROR:gpu_disk_cache.cc(713)] Gpu Cache Creation failed: -2
+[0607/114252.508:WARNING:leveldb_database.cc(141)] Unable to open e:\work\leadgeneration\Ford_ai\ford_profile\Default\shared_proto_db\metadata: IO error: e:\work\leadgeneration\Ford_ai\ford_profile\Default\shared_proto_db\metadata/LOCK: Access denied. (ChromeMethodBFE: 15::LockFile::5)
+[0607/114253.497:ERROR:service_worker_storage.cc(2072)] Failed to delete the database: Database IO error
+[0607/114254.528:WARNING:leveldb_database.cc(141)] Unable to open e:\work\leadgeneration\Ford_ai\ford_profile\Default\shared_proto_db\metadata: IO error: e:\work\leadgeneration\Ford_ai\ford_profile\Default\shared_proto_db\metadata/LOCK: Access denied. (ChromeMethodBFE: 15::LockFile::5)
+[0607/114256.555:WARNING:leveldb_database.cc(141)] Unable to open e:\work\leadgeneration\Ford_ai\ford_profile\Default\shared_proto_db\metadata: IO error: e:\work\leadgeneration\Ford_ai\ford_profile\Default\shared_proto_db\metadata/LOCK: Access denied. (ChromeMethodBFE: 15::LockFile::5)
+[0607/114258.582:WARNING:leveldb_database.cc(141)] Unable to open e:\work\leadgeneration\Ford_ai\ford_profile\Default\shared_proto_db\metadata: IO error: e:\work\leadgeneration\Ford_ai\ford_profile\Default\shared_proto_db\metadata/LOCK: Access denied. (ChromeMethodBFE: 15::LockFile::5)
